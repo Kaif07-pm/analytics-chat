@@ -18,9 +18,16 @@ export type ChatMessage = {
   created_at: string;
 };
 
+let chatDbInitPromise: Promise<void> | null = null;
+
 async function ensureChatDb() {
   if (fs.existsSync(CHAT_DB_PATH)) return;
-  await seedDbs();
+  if (!chatDbInitPromise) {
+    chatDbInitPromise = seedDbs().then(() => undefined).finally(() => {
+      chatDbInitPromise = null;
+    });
+  }
+  await chatDbInitPromise;
 }
 
 function uuidLike(prefix: string) {

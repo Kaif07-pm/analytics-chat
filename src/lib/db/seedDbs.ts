@@ -595,13 +595,41 @@ function seedEvents(db: any, opts?: { eventCount?: number }) {
   tx(rows);
 }
 
-export async function seedDbs() {
+type SeedDbOptions = {
+  forceRecreate?: boolean;
+  eventCount?: number;
+};
+
+function getDefaultEventCount() {
+  const fromEnv = Number(process.env.SEED_EVENT_COUNT ?? "");
+  if (Number.isFinite(fromEnv) && fromEnv > 0) return Math.floor(fromEnv);
+  // Vercel/serverless: keep seeding light to avoid timeouts.
+  return process.env.VERCEL === "1" ? 1200 : 60000;
+}
+
+function dbHasRows(dbPath: string, table: string): boolean {
+  if (!fs.existsSync(dbPath)) return false;
+  const db = new Database(dbPath, { readonly: true });
+  try {
+    const row = db.prepare(`SELECT COUNT(*) AS c FROM ${table}`).get() as { c: number };
+    return (row?.c ?? 0) > 0;
+  } catch {
+    return false;
+  } finally {
+    db.close();
+  }
+}
+
+export async function seedDbs(opts?: SeedDbOptions) {
+  const forceRecreate = opts?.forceRecreate ?? false;
+  const eventCount = opts?.eventCount ?? getDefaultEventCount();
   ensureDirExists();
 
-  // Always recreate to keep deterministic for a prototype session.
-  recreateDb(EVENTS_DB_PATH);
-  recreateDb(QUICK_ACCESS_DB_PATH);
-  recreateDb(CHAT_DB_PATH);
+  if (forceRecreate) {
+    recreateDb(EVENTS_DB_PATH);
+    recreateDb(QUICK_ACCESS_DB_PATH);
+    recreateDb(CHAT_DB_PATH);
+  }
 
   const eventsDb = new Database(EVENTS_DB_PATH);
   const quickDb = new Database(QUICK_ACCESS_DB_PATH);
@@ -612,14 +640,17 @@ export async function seedDbs() {
   initChatSchema(chatDb);
 
   seedQuickAccess(quickDb);
-  seedEvents(eventsDb);
+  if (!dbHasRows(EVENTS_DB_PATH, "events")) {
+    seedEvents(eventsDb, { eventCount });
+  }
 
-  // Insert a default conversation (so UI has something to load).
-  const conversationId = `conv-${Date.now()}`;
-  const createdAt = isoNowIstString();
-  chatDb.prepare(
-    `INSERT INTO conversations (conversation_id, title, created_at) VALUES (?, ?, ?)`
-  ).run(conversationId, "Analytics Prototype", createdAt);
+  // Insert a default conversation only once.
+  const existingConv = chatDb.prepare(`SELECT COUNT(*) AS c FROM conversations`).get() as { c: number };
+  if ((existingConv?.c ?? 0) === 0) {
+    const conversationId = `conv-${Date.now()}`;
+    const createdAt = isoNowIstString();
+    chatDb.prepare(`INSERT INTO conversations (conversation_id, title, created_at) VALUES (?, ?, ?)`).run(conversationId, "Analytics Prototype", createdAt);
+  }
 
   // Close DBs
   eventsDb.close();

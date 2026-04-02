@@ -27,10 +27,17 @@ function inferType(values: unknown[]): string {
   return "text";
 }
 
+let eventsDbInitPromise: Promise<void> | null = null;
+
 async function ensureEventsDb() {
   if (fs.existsSync(EVENTS_DB_PATH)) return;
-  // For prototype: create DBs automatically on first request.
-  await seedDbs();
+  if (!eventsDbInitPromise) {
+    // For prototype/serverless: create DBs automatically on first request.
+    eventsDbInitPromise = seedDbs().then(() => undefined).finally(() => {
+      eventsDbInitPromise = null;
+    });
+  }
+  await eventsDbInitPromise;
 }
 
 export async function runEventsSql(sql: string, params?: Record<string, unknown>): Promise<SqlResultJson> {

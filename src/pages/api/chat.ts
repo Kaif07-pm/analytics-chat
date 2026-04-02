@@ -9,6 +9,11 @@ import { buildGeminiInterpretation, buildGeminiCrossAnswer } from "@/lib/ai/gemi
 
 type ChatMode = "chat" | "quick_access" | "cross";
 
+export const config = {
+  // Helps on platforms that support configurable serverless duration (e.g. Vercel).
+  maxDuration: 60
+};
+
 function nowIsoIstParam() {
   const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
   const ist = new Date(Date.now() + IST_OFFSET_MS);

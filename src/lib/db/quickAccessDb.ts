@@ -9,9 +9,16 @@ export type QuickQuestion = {
   sql_template: string;
 };
 
+let quickDbInitPromise: Promise<void> | null = null;
+
 async function ensureQuickDb() {
   if (fs.existsSync(QUICK_ACCESS_DB_PATH)) return;
-  await seedDbs();
+  if (!quickDbInitPromise) {
+    quickDbInitPromise = seedDbs().then(() => undefined).finally(() => {
+      quickDbInitPromise = null;
+    });
+  }
+  await quickDbInitPromise;
 }
 
 export async function listQuickQuestions(): Promise<QuickQuestion[]> {

@@ -1,7 +1,7 @@
-# node_modules
-# .next
-# .env.local
-# data/*.sqlite
-# data/*.sqlite-*
-# data/.env.local
-# .DS_Store
+node_modules
+.next
+.env.local
+data/*.sqlite
+data/*.sqlite-*
+data/.env.local
+.DS_Store

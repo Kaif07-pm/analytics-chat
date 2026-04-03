@@ -179,10 +179,7 @@ const ChartPanel = ({ payload }: { payload: ChatPayload }) => {
       <div className="mt-3">
         <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="flex items-center justify-between gap-3">
-            <div>
-              <div className="text-[11px] font-bold uppercase tracking-widest text-slate-400">Visualization</div>
-              <div className="mt-1 text-sm text-slate-600">Multi-series (toggle chart type)</div>
-            </div>
+            <div className="text-[11px] font-bold uppercase tracking-widest text-slate-400">Visualization</div>
             <div className="flex items-center gap-2">
               <div className="text-xs font-bold uppercase tracking-widest text-slate-400">Chart</div>
               <select
@@ -257,10 +254,7 @@ const ChartPanel = ({ payload }: { payload: ChatPayload }) => {
     <div className="mt-3">
       <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="flex items-center justify-between gap-3">
-          <div>
-            <div className="text-[11px] font-bold uppercase tracking-widest text-slate-400">Visualization</div>
-            <div className="mt-1 text-sm text-slate-600">Auto + manual chart controls</div>
-          </div>
+          <div className="text-[11px] font-bold uppercase tracking-widest text-slate-400">Visualization</div>
           <div className="flex items-center gap-2">
             <div className="text-xs font-bold uppercase tracking-widest text-slate-400">Chart</div>
             <select
@@ -561,9 +555,6 @@ const ChatPage: NextPage = () => {
                 Senior Manager
               </div>
             </div>
-          </div>
-          <div className="mt-2 text-xs text-slate-600">
-            Workspace dashboards are driven by the event analytics dummy DBs.
           </div>
         </div>
       </aside>

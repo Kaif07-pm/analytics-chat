@@ -1,8 +1,7 @@
 import type { SqlResultJson } from "../db/eventsDb";
 import OpenAI from "openai";
-import fs from "fs";
-import path from "path";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { getGeminiApiKeyFromEnvOrFile } from "./geminiEnv";
 
 export type SqlGenNeedsClarification = {
   message: string;
@@ -243,28 +242,11 @@ Return JSON with one of these shapes (no other text):
   return null;
 }
 
-function getGeminiApiKey(): string | null {
-  const fromEnv = process.env.GEMINI_API_KEY;
-  if (fromEnv) return fromEnv;
-
-  // Your key is currently stored at `data/.env.local` in this prototype workspace.
-  // Next.js won't auto-load nested env files, so we read it manually as a fallback.
-  const filePath = path.join(process.cwd(), "data", ".env.local");
-  try {
-    if (!fs.existsSync(filePath)) return null;
-    const content = fs.readFileSync(filePath, "utf-8");
-    const match = content.match(/^\s*GEMINI_API_KEY\s*=\s*(.+)\s*$/m);
-    return match?.[1] ? String(match[1]).trim() : null;
-  } catch {
-    return null;
-  }
-}
-
 async function generateSqlViaGemini(args: {
   question: string;
   context?: { lastSql?: string; lastResult?: SqlResultJson | null };
 }): Promise<SqlGenOutput | null> {
-  const apiKey = getGeminiApiKey();
+  const apiKey = getGeminiApiKeyFromEnvOrFile();
   if (!apiKey) return null;
 
   const genAI = new GoogleGenerativeAI(apiKey);

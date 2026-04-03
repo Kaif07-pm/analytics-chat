@@ -6,6 +6,7 @@ import { generateSqlFromNaturalLanguage } from "@/lib/ai/sqlGenerator";
 import { buildInterpretation } from "@/lib/ai/interpretation";
 import { autoPickChart, type ChartModel } from "@/lib/chart/chartPicker";
 import { buildGeminiInterpretation, buildGeminiCrossAnswer } from "@/lib/ai/geminiInterpretation";
+import { shouldUseGeminiInterpretation } from "@/lib/ai/geminiEnv";
 
 type ChatMode = "chat" | "quick_access" | "cross";
 
@@ -23,6 +24,19 @@ function nowIsoIstParam() {
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
+  try {
+    return await handleChatPost(req, res);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("[api/chat]", err);
+    return res.status(500).json({
+      error: "Chat request failed. Check Vercel function logs and GEMINI_API_KEY / timeouts.",
+      detail: process.env.NODE_ENV === "development" ? message : undefined
+    });
+  }
+}
+
+async function handleChatPost(req: NextApiRequest, res: NextApiResponse) {
   const body = req.body as {
     conversationId?: string;
     message: string;
@@ -78,13 +92,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         sql = quick.sql_template;
         resultJson = await runEventsSql(sql, { nowIso: nowIsoIstParam() });
         chartModel = autoPickChart(resultJson);
-        const geminiText = await buildGeminiInterpretation({
-          question: quick.question_text,
-          sql,
-          resultJson,
-          chartModel,
-          previousInterpretation: null
-        });
+        const geminiText = shouldUseGeminiInterpretation()
+          ? await buildGeminiInterpretation({
+              question: quick.question_text,
+              sql,
+              resultJson,
+              chartModel,
+              previousInterpretation: null
+            })
+          : null;
         if (geminiText) {
           interpretation = geminiText;
         } else {
@@ -112,13 +128,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const lastSql = body.lastContext.lastSql as string;
       const lastResult = body.lastContext.lastResult as any;
       const lastInterpretation = body.lastContext.lastInterpretation as string | null;
-      const geminiCross = await buildGeminiCrossAnswer({
-        followUpQuestion: message,
-        originalQuestion: body.lastContext.originalQuestion,
-        lastSql,
-        lastResult,
-        lastInterpretation
-      });
+      const geminiCross = shouldUseGeminiInterpretation()
+        ? await buildGeminiCrossAnswer({
+            followUpQuestion: message,
+            originalQuestion: body.lastContext.originalQuestion,
+            lastSql,
+            lastResult,
+            lastInterpretation
+          })
+        : null;
       interpretation = geminiCross ?? `Based on the previous result, here’s the most relevant insight: ${lastInterpretation ?? ""}`.trim();
 
       // Still store payload-less response for now (prototype).
@@ -149,13 +167,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       sql = sqlGen.sql;
       resultJson = await runEventsSql(sql, sqlGen.params);
       chartModel = autoPickChart(resultJson);
-      const geminiText = await buildGeminiInterpretation({
-        question: message,
-        sql,
-        resultJson,
-        chartModel,
-        previousInterpretation: null
-      });
+      const geminiText = shouldUseGeminiInterpretation()
+        ? await buildGeminiInterpretation({
+            question: message,
+            sql,
+            resultJson,
+            chartModel,
+            previousInterpretation: null
+          })
+        : null;
       if (geminiText) {
         interpretation = geminiText;
       } else {

@@ -604,7 +604,8 @@ function getDefaultEventCount() {
   const fromEnv = Number(process.env.SEED_EVENT_COUNT ?? "");
   if (Number.isFinite(fromEnv) && fromEnv > 0) return Math.floor(fromEnv);
   // Vercel/serverless: keep seeding light to avoid timeouts.
-  return process.env.VERCEL === "1" ? 1200 : 60000;
+  // Keep Vercel cold starts under typical Hobby function time limits (seed + first API work).
+  return process.env.VERCEL === "1" ? 800 : 60000;
 }
 
 function dbHasRows(dbPath: string, table: string): boolean {

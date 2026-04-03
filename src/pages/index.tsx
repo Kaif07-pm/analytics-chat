@@ -320,6 +320,7 @@ const ChatPage: NextPage = () => {
 
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [chatError, setChatError] = useState<string | null>(null);
 
   const [editing, setEditing] = useState<null | { messageId: string; draft: string }>(null);
   const [crossQuestion, setCrossQuestion] = useState<string>("");
@@ -372,6 +373,7 @@ const ChatPage: NextPage = () => {
     replaceUserMessageId?: string;
   }) => {
     setLoading(true);
+    setChatError(null);
     try {
       const res = await fetch("/api/chat", {
         method: "POST",
@@ -385,10 +387,35 @@ const ChatPage: NextPage = () => {
           replaceUserMessageId: params.replaceUserMessageId
         })
       });
-      const json = await res.json();
-      if (json.conversationId) setActiveConversationId(json.conversationId);
 
-      if (json.conversationId) {
+      const ct = res.headers.get("content-type") ?? "";
+      const raw = await res.text();
+      let json: Record<string, unknown> = {};
+      if (ct.includes("application/json")) {
+        try {
+          json = JSON.parse(raw) as Record<string, unknown>;
+        } catch {
+          setChatError("Invalid response from server. Check Vercel function logs.");
+          return;
+        }
+      } else {
+        setChatError(
+          res.ok
+            ? "Unexpected response from server."
+            : `Request failed (${res.status}). If this is Vercel, the function may have timed out (10s on Hobby) or crashed.`
+        );
+        return;
+      }
+
+      if (!res.ok) {
+        const errMsg = typeof json.error === "string" ? json.error : `Request failed (${res.status}).`;
+        setChatError(errMsg);
+        return;
+      }
+
+      if (typeof json.conversationId === "string") setActiveConversationId(json.conversationId);
+
+      if (typeof json.conversationId === "string") {
         const mRes = await fetch(`/api/messages?conversationId=${encodeURIComponent(json.conversationId)}`);
         const mJson = await mRes.json();
         setMessages(mJson.messages ?? []);
@@ -397,6 +424,8 @@ const ChatPage: NextPage = () => {
       const cRes = await fetch("/api/conversations");
       const cJson = await cRes.json();
       setConversations(cJson.conversations ?? []);
+    } catch (e) {
+      setChatError(e instanceof Error ? e.message : "Network error.");
     } finally {
       setLoading(false);
     }
@@ -705,6 +734,11 @@ const ChatPage: NextPage = () => {
         </div>
 
         <div className="border-t border-slate-200 bg-white p-6">
+          {chatError ? (
+            <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+              {chatError}
+            </div>
+          ) : null}
           <div className="flex items-end gap-3">
             <div className="flex-1">
               <div className="text-xs font-bold uppercase tracking-widest text-slate-400">

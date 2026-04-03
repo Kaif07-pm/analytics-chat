@@ -1,24 +1,7 @@
-import fs from "fs";
-import path from "path";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import type { SqlResultJson } from "../db/eventsDb";
 import type { ChartModel } from "../chart/chartPicker";
-
-function getGeminiApiKey(): string | null {
-  const fromEnv = process.env.GEMINI_API_KEY;
-  if (fromEnv) return fromEnv;
-
-  // Your key may be stored in `data/.env.local` (based on what you opened).
-  const filePath = path.join(process.cwd(), "data", ".env.local");
-  try {
-    if (!fs.existsSync(filePath)) return null;
-    const content = fs.readFileSync(filePath, "utf-8");
-    const match = content.match(/^\s*GEMINI_API_KEY\s*=\s*(.+)\s*$/m);
-    return match?.[1] ? String(match[1]).trim() : null;
-  } catch {
-    return null;
-  }
-}
+import { getGeminiApiKeyFromEnvOrFile } from "./geminiEnv";
 
 function toResultPreview(result: SqlResultJson, maxRows = 40) {
   return {
@@ -99,7 +82,7 @@ export async function buildGeminiInterpretation(args: {
   chartModel?: ChartModel | null;
   previousInterpretation?: string | null;
 }): Promise<string | null> {
-  const apiKey = getGeminiApiKey();
+  const apiKey = getGeminiApiKeyFromEnvOrFile();
   if (!apiKey) return null;
 
   try {
@@ -158,7 +141,7 @@ export async function buildGeminiCrossAnswer(args: {
   lastResult: SqlResultJson;
   lastInterpretation?: string | null;
 }): Promise<string | null> {
-  const apiKey = getGeminiApiKey();
+  const apiKey = getGeminiApiKeyFromEnvOrFile();
   if (!apiKey) return null;
   try {
     const genAI = new GoogleGenerativeAI(apiKey);

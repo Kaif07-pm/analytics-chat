@@ -32,10 +32,22 @@ export type SqlGenOutput =
     };
 
 function toISTSqlNowParam(now = new Date()) {
-  const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
-  const ist = new Date(now.getTime() + IST_OFFSET_MS);
-  const isoIst = ist.toISOString().slice(0, 19).replace("T", " ");
-  return isoIst;
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  });
+  const parts = formatter.formatToParts(now);
+  const p: Record<string, string> = {};
+  for (const part of parts) {
+    p[part.type] = part.value;
+  }
+  return `${p.year}-${p.month}-${p.day} ${p.hour}:${p.minute}:${p.second}`;
 }
 
 function monthMatchExpr(nowIsoParamName: string) {
@@ -80,10 +92,15 @@ function safeValidateSql(sql: string): { ok: true } | { ok: false; reason: strin
   let trimmed = sql.trim();
   // Allow a single trailing semicolon (common in SQL generators).
   if (trimmed.endsWith(";")) trimmed = trimmed.slice(0, -1).trim();
-  const compact = trimmed.toLowerCase();
-  const forbidden = /(insert|update|delete|drop|alter|create|truncate|attach|detach|pragma)\b/;
+  
+  // Strip string literals before validation to avoid false positives out of them
+  const sqlWithoutStrings = trimmed.replace(/'[^']*'/g, '');
+  const compact = sqlWithoutStrings.toLowerCase();
+
+  const forbidden = /\b(insert|update|delete|drop|alter|create|truncate|attach|detach|pragma)\b/i;
   if (forbidden.test(compact)) return { ok: false, reason: "SQL contains forbidden statement keywords." };
-  if (!(compact.startsWith("select") || compact.startsWith("with"))) return { ok: false, reason: "Only SELECT/CTE queries are allowed." };
+  const lowerTrimmed = trimmed.toLowerCase();
+  if (!(lowerTrimmed.startsWith("select") || lowerTrimmed.startsWith("with"))) return { ok: false, reason: "Only SELECT/CTE queries are allowed." };
   // Block multiple statements (after stripping a possible trailing semicolon).
   if (compact.includes(";")) return { ok: false, reason: "Multiple SQL statements are not allowed." };
   // Must reference events data.
@@ -250,7 +267,7 @@ async function generateSqlViaGemini(args: {
   if (!apiKey) return null;
 
   const genAI = new GoogleGenerativeAI(apiKey);
-  const modelName = process.env.GEMINI_MODEL ?? "gemini-2.5-flash";
+  const modelName = process.env.GEMINI_MODEL ?? "gemini-1.5-flash";
   const model = genAI.getGenerativeModel({ model: modelName });
 
   const nowIso = toISTSqlNowParam(new Date());
@@ -295,9 +312,17 @@ Return JSON ONLY with one of these shapes (no markdown, no extra text):
 }
 `.trim();
 
-  const result = await model.generateContent(prompt);
+  const result = await model.generateContent({
+    contents: [{ role: "user", parts: [{ text: prompt }] }],
+    generationConfig: { responseMimeType: "application/json" }
+  });
   const text = result.response.text();
-  const parsed = extractJsonObject(text);
+  let parsed: any = null;
+  try {
+    parsed = JSON.parse(text);
+  } catch (e) {
+    parsed = extractJsonObject(text);
+  }
   if (!parsed) return null;
 
   if (parsed.type === "out_of_scope") {
@@ -777,22 +802,12 @@ export async function generateSqlFromNaturalLanguage(args: {
     lastResult?: SqlResultJson | null;
   };
 }): Promise<SqlGenOutput> {
-  // For some patterns, deterministic SQL is more reliable than LLM generation.
-  const qLower = args.question.toLowerCase();
-  const isMakerDraftsVsCheckerApprovals =
-    qLower.includes("maker") &&
-    qLower.includes("checker") &&
-    qLower.includes("draft") &&
-    (qLower.includes("daily") || qLower.includes("every day") || qLower.includes("over time") || qLower.includes("day"));
-  if (isMakerDraftsVsCheckerApprovals) {
-    return generateSqlFromNaturalLanguageRules(args);
-  }
-
   // Prefer Gemini (user provided GEMINI_API_KEY). Fall back to OpenAI (if configured).
   let gemini: SqlGenOutput | null = null;
   try {
     gemini = await generateSqlViaGemini({ question: args.question.trim(), context: args.context });
-  } catch {
+  } catch (error) {
+    console.error("Gemini AI error:", error);
     gemini = null;
   }
   if (gemini) return gemini;
@@ -800,10 +815,13 @@ export async function generateSqlFromNaturalLanguage(args: {
   let ai: SqlGenOutput | null = null;
   try {
     ai = await generateSqlViaOpenAI({ question: args.question.trim(), context: args.context });
-  } catch {
+  } catch (error) {
+    console.error("OpenAI error:", error);
     ai = null;
   }
   if (ai) return ai;
+  
+  // Fall back to rule-based parser if AI models are disabled or fail.
   return generateSqlFromNaturalLanguageRules(args);
 }
 

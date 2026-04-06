@@ -1,7 +1,7 @@
 import fs from "fs";
 import Database from "better-sqlite3";
-import { EVENTS_DB_PATH } from "./paths";
-import { seedDbs } from "./seedDbs";
+import { DB_DIR, EVENTS_DB_PATH } from "./paths";
+import { initEventsSchema } from "./seedDbs";
 
 export type SqlResultColumn = { name: string; type: string };
 export type SqlResultJson = {
@@ -28,16 +28,27 @@ function inferType(values: unknown[]): string {
 }
 
 let eventsDbInitPromise: Promise<void> | null = null;
+let eventsSchemaEnsured = false;
 
-async function ensureEventsDb() {
-  if (fs.existsSync(EVENTS_DB_PATH)) return;
+export async function ensureEventsDb() {
+  if (eventsSchemaEnsured) return;
+
   if (!eventsDbInitPromise) {
-    // For prototype/serverless: create DBs automatically on first request.
-    eventsDbInitPromise = seedDbs().then(() => undefined).finally(() => {
-      eventsDbInitPromise = null;
-    });
+    // Create schema automatically; do not seed dummy events.
+    eventsDbInitPromise = (async () => {
+      if (!fs.existsSync(DB_DIR)) fs.mkdirSync(DB_DIR, { recursive: true });
+      const db = new Database(EVENTS_DB_PATH);
+      try {
+        initEventsSchema(db);
+      } finally {
+        db.close();
+      }
+    })();
   }
+
   await eventsDbInitPromise;
+  eventsDbInitPromise = null;
+  eventsSchemaEnsured = true;
 }
 
 export async function runEventsSql(sql: string, params?: Record<string, unknown>): Promise<SqlResultJson> {

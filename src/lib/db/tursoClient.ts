@@ -1,4 +1,6 @@
 import { createClient } from "@libsql/client";
+// Load .env.local
+
 
 // Validate environment variables
 const tursoDbUrl = process.env.TURSO_DATABASE_URL;

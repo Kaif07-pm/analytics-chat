@@ -9,8 +9,7 @@
     "dev": "next dev -p 3000",
     "build": "next build",
     "start": "next start -p 3000",
-    "seed:dbs": "tsx scripts/seed-dbs.ts",
-    "bootstrap:events": "tsx scripts/bootstrap-events.ts"
+    "seed:dbs": "tsx scripts/seed-dbs.ts"
   },
   
   "dependencies": {

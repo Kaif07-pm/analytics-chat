@@ -92,19 +92,87 @@ function safeValidateSql(sql: string): { ok: true } | { ok: false; reason: strin
   let trimmed = sql.trim();
   // Allow a single trailing semicolon (common in SQL generators).
   if (trimmed.endsWith(";")) trimmed = trimmed.slice(0, -1).trim();
-  
-  // Strip string literals before validation to avoid false positives out of them
-  const sqlWithoutStrings = trimmed.replace(/'[^']*'/g, '');
+
+  // ── 1. Block quoting tricks (backticks, square brackets) that could obfuscate
+  //       table names and defeat our token-level checks below.
+  if (/[`\[\]]/.test(trimmed)) {
+    return { ok: false, reason: "SQL must not use backtick or bracket quoting." };
+  }
+
+  // ── 2. Strip single-quoted string literals so their contents can't pollute
+  //       keyword / identifier checks.  Replace with empty placeholder.
+  const sqlWithoutStrings = trimmed.replace(/'(?:[^']|'')*'/g, "''");
   const compact = sqlWithoutStrings.toLowerCase();
 
-  const forbidden = /\b(insert|update|delete|drop|alter|create|truncate|attach|detach|pragma)\b/i;
-  if (forbidden.test(compact)) return { ok: false, reason: "SQL contains forbidden statement keywords." };
-  const lowerTrimmed = trimmed.toLowerCase();
-  if (!(lowerTrimmed.startsWith("select") || lowerTrimmed.startsWith("with"))) return { ok: false, reason: "Only SELECT/CTE queries are allowed." };
-  // Block multiple statements (after stripping a possible trailing semicolon).
-  if (compact.includes(";")) return { ok: false, reason: "Multiple SQL statements are not allowed." };
-  // Must reference events data.
-  if (!compact.includes("from events")) return { ok: false, reason: "SQL must read from the `events` table." };
+  // ── 3. Ensure the query starts with SELECT or WITH (CTE).
+  if (!/^(select|with)\b/.test(compact)) {
+    return { ok: false, reason: "Only SELECT/CTE queries are allowed." };
+  }
+
+  // ── 4. Expanded DML / DDL / admin keyword blocklist.
+  const forbidden =
+    /\b(insert|update|delete|drop|alter|create|truncate|attach|detach|pragma|vacuum|reindex|savepoint|rollback|commit|release|load_extension)\b/;
+  if (forbidden.test(compact)) {
+    return { ok: false, reason: "SQL contains forbidden statement keywords." };
+  }
+
+  // ── 5. Block multiple statements.
+  if (compact.includes(";")) {
+    return { ok: false, reason: "Multiple SQL statements are not allowed." };
+  }
+
+  // ── 6. Collect CTE names declared via  WITH <name> AS (…)
+  //       so they can be used as table references inside the query body.
+  const cteNames = new Set<string>();
+  const ctePattern = /\bwith\b([\s\S]*)/;
+  const cteMatch = compact.match(ctePattern);
+  if (cteMatch) {
+    // Each CTE looks like:  [,] <name> AS (
+    const cteDeclarations = cteMatch[1].matchAll(/\b([a-z_][a-z0-9_]*)\s+as\s*\(/g);
+    for (const m of cteDeclarations) {
+      cteNames.add(m[1]);
+    }
+  }
+
+  // ── 7. Extract every table/subquery-alias identifier that follows a
+  //       FROM, JOIN (any variant), or INTO keyword.
+  //
+  //       Pattern:  \b(from|join|...)\s+  followed by the identifier.
+  //       We skip  (  immediately after the keyword, which signals a
+  //       sub-select rather than a plain table name.
+  const tableRefPattern =
+    /\b(?:from|join|inner\s+join|left\s+join|right\s+join|full\s+join|cross\s+join|natural\s+join)\s+([a-z_][a-z0-9_]*)/g;
+
+  const referencedTables: string[] = [];
+  for (const m of compact.matchAll(tableRefPattern)) {
+    const name = m[1];
+    // Skip SQL keywords that can follow JOIN/FROM in edge cases.
+    const sqlKeywords = new Set([
+      "select", "where", "on", "set", "as", "with", "lateral",
+      "values", "unnest", "rows", "only",
+    ]);
+    if (!sqlKeywords.has(name)) {
+      referencedTables.push(name);
+    }
+  }
+
+  // ── 8. Every referenced table must be either 'events' or a CTE name.
+  //       This is the core allowlist enforcement.
+  const ALLOWED_TABLES = new Set(["events"]);
+  for (const tbl of referencedTables) {
+    if (!ALLOWED_TABLES.has(tbl) && !cteNames.has(tbl)) {
+      return {
+        ok: false,
+        reason: `SQL references disallowed table: "${tbl}". Only the "events" table is permitted.`,
+      };
+    }
+  }
+
+  // ── 9. Must ultimately read from the events table (not just a CTE-only query).
+  if (!compact.includes("from events") && !compact.includes("join events")) {
+    return { ok: false, reason: 'SQL must read from the "events" table.' };
+  }
+
   return { ok: true };
 }
 

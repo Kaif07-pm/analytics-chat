@@ -11,10 +11,9 @@
     "start": "next start -p 3000",
     "seed:dbs": "tsx scripts/seed-dbs.ts"
   },
-  
   "dependencies": {
-    "better-sqlite3": "^11.5.0",
     "@google/generative-ai": "^0.21.0",
+    "better-sqlite3": "^11.5.0",
     "date-fns": "^4.1.0",
     "dotenv": "^17.4.1",
     "html2canvas": "^1.4.1",
@@ -22,6 +21,7 @@
     "jspdf": "^4.2.1",
     "lucide-react": "^0.468.0",
     "next": "^16.2.2",
+    "node-sql-parser": "^5.4.0",
     "openai": "^4.56.0",
     "postcss": "^8.4.41",
     "react": "^18.3.1",

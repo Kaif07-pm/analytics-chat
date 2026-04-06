@@ -1,8 +1,7 @@
 import fs from "fs";
 import Database from "better-sqlite3";
 import { CHAT_DB_PATH } from "./paths";
-import { DB_DIR } from "./paths";
-import { initChatSchema } from "./seedDbs";
+import { seedDbs } from "./seedDbs";
 
 export type Conversation = {
   conversation_id: string;
@@ -24,25 +23,7 @@ let chatDbInitPromise: Promise<void> | null = null;
 async function ensureChatDb() {
   if (fs.existsSync(CHAT_DB_PATH)) return;
   if (!chatDbInitPromise) {
-    chatDbInitPromise = (async () => {
-      if (!fs.existsSync(DB_DIR)) fs.mkdirSync(DB_DIR, { recursive: true });
-      const db = new Database(CHAT_DB_PATH);
-      try {
-        initChatSchema(db);
-        const existingConv = db.prepare(`SELECT COUNT(*) AS c FROM conversations`).get() as { c: number };
-        if ((existingConv?.c ?? 0) === 0) {
-          const conversationId = `conv-${Date.now()}`;
-          const createdAt = new Date().toISOString();
-          db.prepare(`INSERT INTO conversations (conversation_id, title, created_at) VALUES (?, ?, ?)`).run(
-            conversationId,
-            "Analytics Prototype",
-            createdAt
-          );
-        }
-      } finally {
-        db.close();
-      }
-    })().finally(() => {
+    chatDbInitPromise = seedDbs().then(() => undefined).finally(() => {
       chatDbInitPromise = null;
     });
   }

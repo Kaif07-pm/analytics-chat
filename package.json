@@ -13,10 +13,10 @@
     "bootstrap:events": "tsx scripts/bootstrap-events.ts",
     "seed:vercel": "node scripts/seed-vercel.js"
   },
+  
   "dependencies": {
-    "@google/generative-ai": "^0.21.0",
-    "@libsql/client": "^0.17.2",
     "better-sqlite3": "^11.5.0",
+    "@google/generative-ai": "^0.21.0",
     "date-fns": "^4.1.0",
     "dotenv": "^17.4.1",
     "html2canvas": "^1.4.1",

@@ -55,8 +55,19 @@ function isoNowIstString() {
   return toISTString(new Date());
 }
 
+<<<<<<< HEAD
 export async function initEventsSchema() {
   await tursoClient.execute(`
+=======
+function recreateDb(dbPath: string) {
+  if (fs.existsSync(dbPath)) fs.unlinkSync(dbPath);
+  return dbPath;
+}
+
+function initEventsSchema(db: any) {
+  db.exec(`
+    PRAGMA journal_mode = WAL;
+>>>>>>> parent of 37a8e0b0 (Updates)
     CREATE TABLE IF NOT EXISTS events (
       event_id TEXT PRIMARY KEY,
       event_name TEXT NOT NULL,
@@ -71,8 +82,14 @@ export async function initEventsSchema() {
   await tursoClient.execute(`CREATE INDEX IF NOT EXISTS idx_events_name ON events(event_name);`);
 }
 
+<<<<<<< HEAD
 export async function initQuickAccessSchema() {
   await tursoClient.execute(`
+=======
+function initQuickAccessSchema(db: any) {
+  db.exec(`
+    PRAGMA journal_mode = WAL;
+>>>>>>> parent of 37a8e0b0 (Updates)
     CREATE TABLE IF NOT EXISTS quick_access_questions (
       id TEXT PRIMARY KEY,
       question_text TEXT NOT NULL,
@@ -82,8 +99,14 @@ export async function initQuickAccessSchema() {
   `);
 }
 
+<<<<<<< HEAD
 export async function initChatSchema() {
   await tursoClient.execute(`
+=======
+function initChatSchema(db: any) {
+  db.exec(`
+    PRAGMA journal_mode = WAL;
+>>>>>>> parent of 37a8e0b0 (Updates)
     CREATE TABLE IF NOT EXISTS conversations (
       conversation_id TEXT PRIMARY KEY,
       title TEXT NOT NULL,
@@ -104,9 +127,24 @@ export async function initChatSchema() {
   await tursoClient.execute(`CREATE INDEX IF NOT EXISTS idx_messages_conv ON messages(conversation_id, created_at);`);
 }
 
+<<<<<<< HEAD
 export async function seedQuickAccess() {
   const createdAt = isoNowIstString();
   const items = [
+=======
+function isoNowIstString() {
+  return toISTString(new Date());
+}
+
+function seedQuickAccess(db: any) {
+  const nowIsoIst = isoNowIstString();
+
+  // Note: these templates use SQLite named parameters.
+  const nowIsoParam = `:nowIso`;
+  const monthMatch = `strftime('%Y-%m', timestamp_ist) = strftime('%Y-%m', ${nowIsoParam})`;
+
+  const items: Array<{ id: string; question: string; sql: string }> = [
+>>>>>>> parent of 37a8e0b0 (Updates)
     {
       id: "qa_most_action_daily",
       question: "Which system action is performed the most every day?",
@@ -147,7 +185,13 @@ export async function seedQuickAccess() {
   }
 }
 
+<<<<<<< HEAD
 export async function seedEvents(eventCount: number = 60000) {
+=======
+function seedEvents(db: any, opts?: { eventCount?: number }) {
+  const eventCount = opts?.eventCount ?? 60000;
+
+>>>>>>> parent of 37a8e0b0 (Updates)
   const users = makeBaseUsers();
   const checkerGroups = [
     { id: "G-CHK-01", name: "Checker Group A" },

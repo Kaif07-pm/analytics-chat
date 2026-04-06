@@ -10,26 +10,26 @@ export type SqlGenNeedsClarification = {
 
 export type SqlGenOutput =
   | {
-      kind: "ok";
-      sql: string;
-      params?: Record<string, unknown>;
-      intent?:
-        | "MOST_ACTION_DAILY"
-        | "ONBOARDING_THIS_MONTH"
-        | "ONBOARDING_THIS_MONTH_WEEK_WISE"
-        | "BULK_UPLOADS_PEAK_HOUR"
-        | "CHECKER_GROUP_APPROVES_MOST"
-        | "AVG_WAIT_MAKER_TO_ADMIN"
-        | "ELEVATED_ACCESS_PENDING_QUEUE";
-    }
+    kind: "ok";
+    sql: string;
+    params?: Record<string, unknown>;
+    intent?:
+    | "MOST_ACTION_DAILY"
+    | "ONBOARDING_THIS_MONTH"
+    | "ONBOARDING_THIS_MONTH_WEEK_WISE"
+    | "BULK_UPLOADS_PEAK_HOUR"
+    | "CHECKER_GROUP_APPROVES_MOST"
+    | "AVG_WAIT_MAKER_TO_ADMIN"
+    | "ELEVATED_ACCESS_PENDING_QUEUE";
+  }
   | {
-      kind: "out_of_scope";
-      message: string;
-    }
+    kind: "out_of_scope";
+    message: string;
+  }
   | {
-      kind: "needs_clarification";
-      clarification: SqlGenNeedsClarification;
-    };
+    kind: "needs_clarification";
+    clarification: SqlGenNeedsClarification;
+  };
 
 function toISTSqlNowParam(now = new Date()) {
   const formatter = new Intl.DateTimeFormat("en-US", {
@@ -236,10 +236,10 @@ async function generateSqlViaOpenAI(args: {
   const schemaCtx = buildEventsSchemaContext();
   const contextForModel = args.context?.lastResult
     ? {
-        lastSql: args.context?.lastSql ?? null,
-        lastResultColumns: args.context.lastResult.columns,
-        lastResultRowsPreview: args.context.lastResult.rows.slice(0, 20)
-      }
+      lastSql: args.context?.lastSql ?? null,
+      lastResultColumns: args.context.lastResult.columns,
+      lastResultRowsPreview: args.context.lastResult.rows.slice(0, 20)
+    }
     : { lastSql: args.context?.lastSql ?? null, lastResult: null };
 
   const completion = await openai.chat.completions.create({
@@ -335,17 +335,17 @@ async function generateSqlViaGemini(args: {
   if (!apiKey) return null;
 
   const genAI = new GoogleGenerativeAI(apiKey);
-  const modelName = process.env.GEMINI_MODEL ?? "gemini-1.5-flash";
+  const modelName = process.env.GEMINI_MODEL ?? "gemini-2.5-flash";
   const model = genAI.getGenerativeModel({ model: modelName });
 
   const nowIso = toISTSqlNowParam(new Date());
   const schemaCtx = buildEventsSchemaContext();
   const contextForModel = args.context?.lastResult
     ? {
-        lastSql: args.context?.lastSql ?? null,
-        lastResultColumns: args.context.lastResult.columns,
-        lastResultRowsPreview: args.context.lastResult.rows.slice(0, 20)
-      }
+      lastSql: args.context?.lastSql ?? null,
+      lastResultColumns: args.context.lastResult.columns,
+      lastResultRowsPreview: args.context.lastResult.rows.slice(0, 20)
+    }
     : { lastSql: args.context?.lastSql ?? null, lastResult: null };
 
   const prompt = `
@@ -888,7 +888,7 @@ export async function generateSqlFromNaturalLanguage(args: {
     ai = null;
   }
   if (ai) return ai;
-  
+
   // Fall back to rule-based parser if AI models are disabled or fail.
   return generateSqlFromNaturalLanguageRules(args);
 }

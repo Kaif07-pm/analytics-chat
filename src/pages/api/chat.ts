@@ -15,12 +15,6 @@ export const config = {
   maxDuration: 60
 };
 
-function nowIsoIstParam() {
-  const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
-  const ist = new Date(Date.now() + IST_OFFSET_MS);
-  return ist.toISOString().slice(0, 19).replace("T", " ");
-}
-
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
@@ -80,6 +74,38 @@ async function handleChatPost(req: NextApiRequest, res: NextApiResponse) {
   let chartModel: ChartModel | null = null;
   let interpretation = "";
 
+  // Cross-question: answer from prior SQL/result/interpretation only (no new SQL).
+  if (mode === "cross" && body.lastContext?.lastResult && body.lastContext?.lastSql) {
+    const lastSql = body.lastContext.lastSql as string;
+    const lastResult = body.lastContext.lastResult as any;
+    const lastInterpretation = body.lastContext.lastInterpretation as string | null;
+    const geminiCross = shouldUseGeminiInterpretation()
+      ? await buildGeminiCrossAnswer({
+          followUpQuestion: message,
+          originalQuestion: body.lastContext.originalQuestion,
+          lastSql,
+          lastResult,
+          lastInterpretation
+        })
+      : null;
+    interpretation = geminiCross ?? `Based on the previous result, here’s the most relevant insight: ${lastInterpretation ?? ""}`.trim();
+
+    await storeMessage({
+      conversationId: conversation.conversation_id,
+      role: "assistant",
+      content: interpretation,
+      payload: { sql: lastSql, resultJson: lastResult, chartModel: null }
+    });
+
+    res.status(200).json({
+      conversationId: conversation.conversation_id,
+      assistant: { content: interpretation, payload: { sql: lastSql, resultJson: lastResult, chartModel: null } }
+    });
+    return;
+  }
+
+  // Quick access: validate the sidebar item exists, but always generate SQL from the user message (same as chat).
+  let quickAccessOk = false;
   if (mode === "quick_access") {
     const qid = body.quickQuestionId;
     if (!qid) {
@@ -89,71 +115,14 @@ async function handleChatPost(req: NextApiRequest, res: NextApiResponse) {
       if (!quick) {
         interpretation = "I couldn't find that quick access question.";
       } else {
-        sql = quick.sql_template;
-        resultJson = await runEventsSql(sql, { nowIso: nowIsoIstParam() });
-        chartModel = autoPickChart(resultJson);
-        const geminiText = shouldUseGeminiInterpretation()
-          ? await buildGeminiInterpretation({
-              question: quick.question_text,
-              sql,
-              resultJson,
-              chartModel,
-              previousInterpretation: null
-            })
-          : null;
-        if (geminiText) {
-          interpretation = geminiText;
-        } else {
-          const intentByQuickId: Record<string, any> = {
-            qa_most_action_daily: "MOST_ACTION_DAILY",
-            qa_onboarding_this_month: "ONBOARDING_THIS_MONTH",
-            qa_bulk_uploads_peak_hour: "BULK_UPLOADS_PEAK_HOUR",
-            qa_checker_group_approves_most: "CHECKER_GROUP_APPROVES_MOST",
-            qa_avg_wait_maker_to_admin: "AVG_WAIT_MAKER_TO_ADMIN",
-            qa_elevated_access_pending: "ELEVATED_ACCESS_PENDING_QUEUE"
-          };
-          const intent = intentByQuickId[qid];
-          interpretation = buildInterpretation({
-            question: quick.question_text,
-            sqlGen: intent ? ({ kind: "ok", intent } as any) : ({ kind: "out_of_scope", message: "Quick access mapping missing" } as any),
-            sql,
-            result: resultJson
-          });
-        }
+        quickAccessOk = true;
       }
     }
-  } else {
-    // For cross-question mode, try Gemini interpretation using the previous result as context
-    if (mode === "cross" && body.lastContext?.lastResult && body.lastContext?.lastSql) {
-      const lastSql = body.lastContext.lastSql as string;
-      const lastResult = body.lastContext.lastResult as any;
-      const lastInterpretation = body.lastContext.lastInterpretation as string | null;
-      const geminiCross = shouldUseGeminiInterpretation()
-        ? await buildGeminiCrossAnswer({
-            followUpQuestion: message,
-            originalQuestion: body.lastContext.originalQuestion,
-            lastSql,
-            lastResult,
-            lastInterpretation
-          })
-        : null;
-      interpretation = geminiCross ?? `Based on the previous result, here’s the most relevant insight: ${lastInterpretation ?? ""}`.trim();
+  }
 
-      // Still store payload-less response for now (prototype).
-      await storeMessage({
-        conversationId: conversation.conversation_id,
-        role: "assistant",
-        content: interpretation,
-        payload: { sql: lastSql, resultJson: lastResult, chartModel: null }
-      });
+  const runNlToSql = mode === "chat" || (mode === "quick_access" && quickAccessOk);
 
-      res.status(200).json({
-        conversationId: conversation.conversation_id,
-        assistant: { content: interpretation, payload: { sql: lastSql, resultJson: lastResult, chartModel: null } }
-      });
-      return;
-    }
-
+  if (runNlToSql) {
     const sqlGen = await generateSqlFromNaturalLanguage({
       question: message,
       context: body.lastContext

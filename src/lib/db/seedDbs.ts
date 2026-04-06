@@ -80,7 +80,7 @@ function recreateDb(dbPath: string) {
   return dbPath;
 }
 
-function initEventsSchema(db: any) {
+export function initEventsSchema(db: any) {
   db.exec(`
     PRAGMA journal_mode = WAL;
     CREATE TABLE IF NOT EXISTS events (
@@ -97,7 +97,7 @@ function initEventsSchema(db: any) {
   `);
 }
 
-function initQuickAccessSchema(db: any) {
+export function initQuickAccessSchema(db: any) {
   db.exec(`
     PRAGMA journal_mode = WAL;
     CREATE TABLE IF NOT EXISTS quick_access_questions (
@@ -109,7 +109,7 @@ function initQuickAccessSchema(db: any) {
   `);
 }
 
-function initChatSchema(db: any) {
+export function initChatSchema(db: any) {
   db.exec(`
     PRAGMA journal_mode = WAL;
     CREATE TABLE IF NOT EXISTS conversations (
@@ -134,7 +134,7 @@ function isoNowIstString() {
   return toISTString(new Date());
 }
 
-function seedQuickAccess(db: any) {
+export function seedQuickAccess(db: any) {
   const nowIsoIst = isoNowIstString();
 
   // Note: these templates use SQLite named parameters.
@@ -291,7 +291,7 @@ function seedQuickAccess(db: any) {
   }
 }
 
-function seedEvents(db: any, opts?: { eventCount?: number }) {
+export function seedEvents(db: any, opts?: { eventCount?: number }) {
   const eventCount = opts?.eventCount ?? 60000;
 
   const users = makeBaseUsers();

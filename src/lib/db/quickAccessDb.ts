@@ -1,7 +1,8 @@
 import fs from "fs";
 import Database from "better-sqlite3";
 import { QUICK_ACCESS_DB_PATH } from "./paths";
-import { seedDbs } from "./seedDbs";
+import { DB_DIR } from "./paths";
+import { initQuickAccessSchema, seedQuickAccess } from "./seedDbs";
 
 export type QuickQuestion = {
   id: string;
@@ -14,7 +15,16 @@ let quickDbInitPromise: Promise<void> | null = null;
 async function ensureQuickDb() {
   if (fs.existsSync(QUICK_ACCESS_DB_PATH)) return;
   if (!quickDbInitPromise) {
-    quickDbInitPromise = seedDbs().then(() => undefined).finally(() => {
+    quickDbInitPromise = (async () => {
+      if (!fs.existsSync(DB_DIR)) fs.mkdirSync(DB_DIR, { recursive: true });
+      const db = new Database(QUICK_ACCESS_DB_PATH);
+      try {
+        initQuickAccessSchema(db);
+        seedQuickAccess(db);
+      } finally {
+        db.close();
+      }
+    })().finally(() => {
       quickDbInitPromise = null;
     });
   }

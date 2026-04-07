@@ -303,25 +303,34 @@ function seedEvents(db: any, opts?: { eventCount?: number }) {
   const resources = ["High_Net_Worth_Widget", "Regulatory_Dashboard_Widget", "Risk_Scoring_Widget"];
 
   const eventNames = [
-    "create_custom_role",
-    "approve_maker_draft",
     "submit_maker_draft",
-    "search_user_profile",
-    "initiate_screening",
-    "revert_transaction",
-    "bulk_upload_submit",
-    "generate_report",
+    "approve_maker_draft",
     "request_elevated_access",
-    "create_data_filter_group",
+    "approve_elevated_access",
+    "reject_elevated_access",
+    "create_custom_role",
     "disable_system_role",
-    "fetch_access_logs",
-    "search_ringfenced_txns",
-    "search_dispute_intents",
-    "update_monitoring_scenario",
-    "filter_evaluation_cases",
     "assign_user_group",
+    "disable_group",
+    "create_data_filter_group",
+    "submit_widget_update",
+    "fetch_access_logs",
+    "search_operators",
+    "update_timezone",
+    "search_user_profile",
+    "search_ringfenced_txns",
+    "search_operator_actions",
+    "search_dispute_intents",
+    "bulk_upload_submit",
     "upload_bulk_screening",
-    "submit_widget_update"
+    "initiate_screening",
+    "search_compliance_cases",
+    "filter_compliance_cases",
+    "filter_evaluation_cases",
+    "update_monitoring_scenario",
+    "delete_monitoring_scenario",
+    "generate_report",
+    "revert_transaction"
   ];
 
   const seedStartDays = 65;
@@ -500,15 +509,7 @@ function seedEvents(db: any, opts?: { eventCount?: number }) {
 
     // Populate properties per event_name so the analytics queries can extract JSON fields.
     const properties: Record<string, unknown> = {};
-    if (event_name === "create_custom_role") {
-      properties.role_name = choice(["Senior Compliance", "Risk Reviewer", "Operations Admin"]);
-      properties.permissions = choice([
-        ["read_restricted", "write_limited"],
-        ["read_limited", "write_limited"],
-        ["read_restricted"]
-      ]);
-      properties.operator_count_impact = randInt(0, 12);
-    } else if (event_name === "submit_maker_draft") {
+    if (event_name === "submit_maker_draft") {
       const draft_id = choice(draftIds);
       properties.draft_id = draft_id;
       properties.maker_user_id = draftToMaker.get(draft_id) ?? user_id;
@@ -521,24 +522,6 @@ function seedEvents(db: any, opts?: { eventCount?: number }) {
       properties.action_taken = "APPROVED";
       properties.checker_group_id = checkerGroup.id;
       properties.checker_group_name = checkerGroup.name;
-    } else if (event_name === "initiate_screening") {
-      properties.reference_id = `REF-${randInt(1000, 9999)}`;
-      properties.field_screened = choice(["DOB", "Passport", "Name", "Address"]);
-      properties.screening_category = choice(["ONBOARDING_INDIVIDUAL", "ONBOARDING_CORPORATE", "TRANSACTION_MONITORING"]);
-    } else if (event_name === "filter_evaluation_cases") {
-      properties.assignment_status = choice(["UNASSIGNED", "ASSIGNED"]);
-      properties.case_status = choice(["PENDING_REVIEW", "IN_PROGRESS", "COMPLETED"]);
-      properties.custom_filter_applied = choice([true, false]);
-    } else if (event_name === "bulk_upload_submit") {
-      properties.request_type = "BULK_NOTIFICATION";
-      properties.file_name = choice(["april_notifs_v2.csv", "customer_update_batch.csv", "bulk_notifications_q2.csv"]);
-      properties.row_count = randInt(150, 1200);
-      properties.template_valid = choice([true, true, false]);
-    } else if (event_name === "upload_bulk_screening") {
-      properties.file_name = choice(["q2_screening_batch.xlsx", "screening_batch_march.xlsx", "bulk_screening_may.xlsx"]);
-      properties.record_count = randInt(50, 1000);
-      properties.template_version = choice(["1.4", "1.5", "1.3"]);
-      properties.upload_method = choice(["drag_and_drop", "file_picker"]);
     } else if (event_name === "request_elevated_access") {
       const requestId = choice(elevatedRequestIds);
       properties.elevated_access_request_id = requestId;
@@ -553,10 +536,30 @@ function seedEvents(db: any, opts?: { eventCount?: number }) {
       const requestId = choice(elevatedRequestIds);
       properties.elevated_access_request_id = requestId;
       properties.status = "REJECTED";
+    } else if (event_name === "create_custom_role") {
+      properties.role_name = choice(["Senior Compliance", "Risk Reviewer", "Operations Admin"]);
+      properties.permissions = choice([
+        ["read_restricted", "write_limited"],
+        ["read_limited", "write_limited"],
+        ["read_restricted"]
+      ]);
+      properties.operator_count_impact = randInt(0, 12);
+    } else if (event_name === "disable_system_role") {
+      properties.role_id = `R-${randInt(100, 999)}`;
+      properties.role_name = choice(["Legacy Viewer", "Branch Ops", "Temp Editor"]);
+      properties.previous_status = "ACTIVE";
+      if (Math.random() > 0.3) properties.impacted_users = randInt(1, 50);
     } else if (event_name === "assign_user_group") {
       properties.target_user_id = choice([...makerUsers, ...users.generalAdminIds]);
       properties.group_id = choice(["G-CHK-01", "G-OPS-01", "G-RPT-01"]);
       properties.group_type = choice(["CHECKER_GROUP", "OPS_GROUP", "REPORT_GROUP"]);
+    } else if (event_name === "disable_group") {
+      properties.group_id = `G-${randInt(100, 999)}`;
+      properties.group_name = choice(["Seasonal Temps", "Project Alpha", "Test Group"]);
+    } else if (event_name === "create_data_filter_group") {
+      properties.group_name = choice(["APAC Region View", "High Risk Transactions", "EMEA Segregation"]);
+      properties.region_restricted = choice(["APAC", "EMEA", "LATAM", "NA"]);
+      properties.operators_assigned_on_creation = randInt(1, 20);
     } else if (event_name === "submit_widget_update") {
       properties.widget_id = choice(["W-CUST-PROFILE", "W-RISK-SCORES", "W-HNWI-DASH"]);
       properties.fields_modified = choice([
@@ -565,13 +568,85 @@ function seedEvents(db: any, opts?: { eventCount?: number }) {
         ["risk_band", "notes"]
       ]);
       properties.concurrent_modifications_detected = choice([false, true]);
+    } else if (event_name === "fetch_access_logs") {
+      properties.target_operator_email_hash = Math.random().toString(16).slice(2, 10);
+      properties.record_limit_set = choice([50, 100, 500, 1000]);
+      if (Math.random() > 0.5) properties.actual_logs_returned = randInt(10, properties.record_limit_set as number);
+    } else if (event_name === "search_operators") {
+      properties.record_limit = choice([10, 20, 50, 100]);
+      if (Math.random() > 0.2) properties.records_returned = randInt(0, properties.record_limit as number);
+    } else if (event_name === "update_timezone") {
+      properties.new_timezone = choice(["Asia/Singapore", "America/New_York", "Europe/London", "UTC"]);
     } else if (event_name === "search_user_profile") {
       properties.filter_on = choice(["email", "customer_id", "phone"]);
       properties.filter_value_hash = Math.random().toString(16).slice(2, 10);
       properties.profile_status = choice(["ACTIVE", "SUSPENDED"]);
       properties.records_returned = randInt(0, 20);
+    } else if (event_name === "search_ringfenced_txns") {
+      if (Math.random() > 0.5) properties.transaction_type = choice(["Wire", "ACH", "Internal_Transfer"]);
+      if (Math.random() > 0.5) properties.transaction_status = choice(["PENDING", "CLEARED", "REJECTED"]);
+      if (Math.random() > 0.2) {
+        properties.from_date = toISTString(addDays(ts, -7)).split(' ')[0];
+        properties.to_date = toISTString(ts).split(' ')[0];
+      }
+    } else if (event_name === "search_operator_actions") {
+      properties.queue_tab = choice(["Pending Actions", "Completed Tasks", "Rejections"]);
+      properties.record_limit = choice([20, 50, 100]);
+    } else if (event_name === "search_dispute_intents") {
+      properties.from_date = toISTString(addDays(ts, -30)).split(' ')[0];
+      properties.to_date = toISTString(ts).split(' ')[0];
+      if (Math.random() > 0.2) properties.records_returned = randInt(0, 150);
+    } else if (event_name === "bulk_upload_submit") {
+      properties.request_type = "BULK_NOTIFICATION";
+      properties.file_name = choice(["april_notifs_v2.csv", "customer_update_batch.csv", "bulk_notifications_q2.csv"]);
+      properties.row_count = randInt(150, 1200);
+      properties.template_valid = choice([true, true, false]);
+    } else if (event_name === "upload_bulk_screening") {
+      properties.file_name = choice(["q2_screening_batch.xlsx", "screening_batch_march.xlsx", "bulk_screening_may.xlsx"]);
+      properties.record_count = randInt(50, 1000);
+      properties.template_version = choice(["1.4", "1.5", "1.3"]);
+      properties.upload_method = choice(["drag_and_drop", "button_click"]);
+    } else if (event_name === "initiate_screening") {
+      if (Math.random() > 0.3) properties.reference_id = `REF-${randInt(1000, 9999)}`;
+      properties.field_screened = choice(["DOB", "Passport", "Name", "Address"]);
+      properties.value_screened_hash = Math.random().toString(16).slice(2, 10);
+      properties.screening_category = choice(["ONBOARDING_INDIVIDUAL", "ONBOARDING_CORPORATE", "TRANSACTION_MONITORING"]);
+    } else if (event_name === "search_compliance_cases") {
+      if (Math.random() > 0.5) properties.assignment_status = choice(["UNASSIGNED", "ASSIGNED"]);
+      if (Math.random() > 0.5) properties.case_status = choice(["OPEN", "CLOSED", "UNDER_REVIEW"]);
+      if (Math.random() > 0.8) properties.custom_filter_name = choice(["High Priority Q1", "Escalated Region C"]);
+      if (Math.random() > 0.5) {
+        properties.start_date = toISTString(addDays(ts, -14)).split(' ')[0];
+        properties.end_date = toISTString(ts).split(' ')[0];
+      }
+    } else if (event_name === "filter_compliance_cases") {
+      if (Math.random() > 0.2) properties.screening_category = choice(["ONBOARDING_INDIVIDUAL", "TRANSACTION_MONITORING"]);
+      if (Math.random() > 0.5) properties.search_term_hash = Math.random().toString(16).slice(2, 10);
+    } else if (event_name === "filter_evaluation_cases") {
+      if (Math.random() > 0.3) properties.assignment_status = choice(["UNASSIGNED", "ASSIGNED"]);
+      if (Math.random() > 0.3) properties.case_status = choice(["PENDING_REVIEW", "IN_PROGRESS", "COMPLETED"]);
+      properties.custom_filter_applied = choice([true, false]);
+      if (Math.random() > 0.5) {
+        properties.start_date = toISTString(addDays(ts, -90)).split(' ')[0];
+        properties.end_date = toISTString(ts).split(' ')[0];
+      }
+    } else if (event_name === "update_monitoring_scenario") {
+      properties.scenario_id = `SCN-${randInt(10, 99)}`;
+      properties.scenario_name = choice(["External Post Txn", "High Velocity Velocity", "Card Present Match"]);
+      if (Math.random() > 0.2) properties.previous_version = `v${randInt(1, 5)}.${randInt(0, 9)}`;
+      properties.new_published_version = `v${randInt(6, 10)}.${randInt(0, 9)}`;
+    } else if (event_name === "delete_monitoring_scenario") {
+      properties.scenario_id = `SCN-${randInt(10, 99)}`;
+    } else if (event_name === "generate_report") {
+      properties.report_type = choice(["BALANCE_REPORT_MONTHLY", "COMPLIANCE_AUDIT_Q2", "USER_ACCESS_LOG"]);
+      if (Math.random() > 0.3) properties.date_range = "2026-03-01 to 2026-04-01";
+      if (Math.random() > 0.1) properties.export_format = choice(["CSV", "PDF", "XLSX"]);
+    } else if (event_name === "revert_transaction") {
+      properties.target_transaction_id = `TXN-${randInt(10000, 99999)}`;
+      properties.reversal_status = choice(["SUCCESS", "FAILED", "PENDING_APPROVAL"]);
+      if (Math.random() > 0.2) properties.original_amount = randInt(100, 50000);
     } else {
-      // Keep other event properties minimal.
+      // Keep other event properties minimal if any fallback.
       properties.misc = `v${randInt(1, 20)}.${randInt(0, 99)}`;
     }
 

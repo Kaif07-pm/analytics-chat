@@ -197,16 +197,35 @@ Important:
   - Time/category + metric columns for charts (e.g., day/week_start_date/hour_of_day + count/average).
   - Or KPI shape (single-row single-metric column) for scalar answers.
 
-Known properties_json keys by event_name (not exhaustive):
-- create_custom_role: role_name, permissions, operator_count_impact
-- submit_maker_draft/approve_maker_draft: draft_id, maker_user_id, signature_valid, action_taken, checker_group_id, checker_group_name
-- initiate_screening: reference_id, field_screened, screening_category (ONBOARDING_* categories)
-- bulk_upload_submit: request_type, file_name, row_count, template_valid
-- upload_bulk_screening: file_name, record_count, template_version, upload_method
-- request_elevated_access / approve_elevated_access / reject_elevated_access:
-  elevated_access_request_id, target_resource, access_type, status
-- approve_elevated_access / reject_elevated_access: status
-- filter_evaluation_cases: assignment_status, case_status, custom_filter_applied
+Known exhaustive properties_json keys by event_name:
+- submit_maker_draft: draft_id (String, ID for the draft), maker_user_id (String)
+- approve_maker_draft: draft_id (String), maker_user_id (String), signature_valid (Boolean), action_taken (String, strict APPROVED), checker_group_id (String), checker_group_name (String)
+- request_elevated_access: elevated_access_request_id (String), target_resource (String), access_type (String, WRITE_LIMITED/READ_ONLY), status (String, strict PENDING_SUPERIOR_APPROVAL)
+- approve_elevated_access: elevated_access_request_id (String), status (String)
+- reject_elevated_access: elevated_access_request_id (String), status (String, strict REJECTED)
+- create_custom_role: role_name (String), permissions (Array/JSON), operator_count_impact (Integer)
+- disable_system_role: role_id (String), role_name (String), previous_status (String), impacted_users (Integer, Optional)
+- assign_user_group: target_user_id (String), group_id (String), group_type (String)
+- disable_group: group_id (String), group_name (String)
+- create_data_filter_group: group_name (String), region_restricted (String), operators_assigned_on_creation (Integer)
+- submit_widget_update: widget_id (String), fields_modified (Array/JSON), concurrent_modifications_detected (Boolean)
+- fetch_access_logs: target_operator_email_hash (String), record_limit_set (Integer), actual_logs_returned (Integer, Optional)
+- search_operators: record_limit (Integer), records_returned (Integer, Optional)
+- update_timezone: new_timezone (String)
+- search_user_profile: filter_on (String), filter_value_hash (String), profile_status (String), records_returned (Integer)
+- search_ringfenced_txns: transaction_type (String, Optional), transaction_status (String, Optional), from_date (String, Optional YYYY-MM-DD), to_date (String, Optional YYYY-MM-DD)
+- search_operator_actions: queue_tab (String), record_limit (Integer)
+- search_dispute_intents: from_date (String YYYY-MM-DD), to_date (String YYYY-MM-DD), records_returned (Integer, Optional)
+- bulk_upload_submit: request_type (String), file_name (String), row_count (Integer), template_valid (Boolean)
+- upload_bulk_screening: file_name (String), record_count (Integer), template_version (String), upload_method (String)
+- initiate_screening: reference_id (String, Optional), field_screened (String), value_screened_hash (String), screening_category (String)
+- search_compliance_cases: assignment_status (String, Optional), case_status (String, Optional), custom_filter_name (String, Optional), start_date (String, Optional YYYY-MM-DD), end_date (String, Optional YYYY-MM-DD)
+- filter_compliance_cases: screening_category (String, Optional), search_term_hash (String, Optional)
+- filter_evaluation_cases: assignment_status (String, Optional), case_status (String, Optional), custom_filter_applied (Boolean), start_date (String, Optional YYYY-MM-DD), end_date (String, Optional YYYY-MM-DD)
+- update_monitoring_scenario: scenario_id (String), scenario_name (String), previous_version (String, Optional), new_published_version (String)
+- delete_monitoring_scenario: scenario_id (String)
+- generate_report: report_type (String), date_range (String, Optional), export_format (String, Optional)
+- revert_transaction: target_transaction_id (String), reversal_status (String), original_amount (Integer, Optional)
 
 Time helpers (timestamp_ist is IST string):
 - day: date(timestamp_ist)

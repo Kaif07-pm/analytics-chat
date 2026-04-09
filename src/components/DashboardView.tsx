@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { ResponsiveGridLayout } from "react-grid-layout";
+import { ResponsiveGridLayout, useContainerWidth } from "react-grid-layout";
 import { Plus, LayoutDashboard, Send, MessageSquareText, RefreshCw } from "lucide-react";
 import { DashboardWidget } from "./DashboardWidget";
 import type { Dashboard, DashboardItem } from "@/lib/db/dashboardDb";
 
-// ── Local layout type compatible with react-grid-layout LayoutItem ───────────
+// ── Local layout type ────────────────────────────────────────────────────────
 type GridItem = { i: string; x: number; y: number; w: number; h: number; minW?: number; minH?: number };
-type Layouts = { lg: GridItem[]; md?: GridItem[]; sm?: GridItem[] };
+type GridMapping = { lg: GridItem[]; [key: string]: GridItem[] | undefined };
 
 interface DashboardViewProps {
   quickQuestions: Array<{ id: string; question_text: string }>;
@@ -20,13 +20,14 @@ export function DashboardView({ quickQuestions }: DashboardViewProps) {
   const [dashboards, setDashboards] = useState<Dashboard[]>([]);
   const [activeDashboardId, setActiveDashboardId] = useState<string | null>(null);
   const [widgets, setWidgets] = useState<WidgetEntry[]>([]);
-  const [layouts, setLayouts] = useState<Layouts>({ lg: [] });
+  const [layouts, setLayouts] = useState<GridMapping>({ lg: [] });
 
   const [prompt, setPrompt] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  
+  const { width, containerRef, mounted } = useContainerWidth({ measureBeforeMount: false });
 
-  const scrollRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const layoutSaveTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -47,10 +48,10 @@ export function DashboardView({ quickQuestions }: DashboardViewProps) {
 
   // Auto-scroll to bottom when new widget is added
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    if (containerRef.current) {
+      containerRef.current.scrollTop = containerRef.current.scrollHeight;
     }
-  }, [widgets.length]);
+  }, [widgets.length, mounted]);
 
   const loadDashboards = async () => {
     const res = await fetch("/api/dashboards");
@@ -120,8 +121,9 @@ export function DashboardView({ quickQuestions }: DashboardViewProps) {
         setWidgets(prev => {
           const next = [...prev, { item: newItem }];
           // Place new widget at the bottom of the grid
-          setLayouts(prevLayouts => {
-            const existingMax = prevLayouts.lg.reduce((max, l) => Math.max(max, l.y + l.h), 0);
+          setLayouts((prevLayouts: GridMapping) => {
+            const lg = prevLayouts.lg || [];
+            const existingMax = lg.reduce((max: number, l: any) => Math.max(max, l.y + l.h), 0);
             const col = prev.length % 2 === 0 ? 0 : 6;
             const newGridItem: GridItem = {
               i: newItem.item_id,
@@ -132,7 +134,7 @@ export function DashboardView({ quickQuestions }: DashboardViewProps) {
               minW: 2,
               minH: 4
             };
-            return { lg: [...prevLayouts.lg, newGridItem] };
+            return { ...prevLayouts, lg: [...lg, newGridItem] };
           });
           return next;
         });
@@ -148,19 +150,20 @@ export function DashboardView({ quickQuestions }: DashboardViewProps) {
     if (!activeDashboardId) return;
     await fetch(`/api/dashboards/${activeDashboardId}/items/${itemId}`, { method: "DELETE" });
     setWidgets(prev => prev.filter(w => w.item.item_id !== itemId));
-    setLayouts(prev => ({ lg: prev.lg.filter(l => l.i !== itemId) }));
+    setLayouts((prev: GridMapping) => ({ ...prev, lg: (prev.lg || []).filter((l: any) => l.i !== itemId) }));
   }, [activeDashboardId]);
 
   // Fired by react-grid-layout on drag/resize stop
-  const onLayoutChange = useCallback((currentLayout: any[]) => {
+  const onLayoutChange = useCallback((layout: any, allLayouts: any) => {
     if (!activeDashboardId) return;
-    setLayouts({ lg: currentLayout });
+    setLayouts(allLayouts);
 
     // Debounced persistence
     if (layoutSaveTimeout.current) clearTimeout(layoutSaveTimeout.current);
     layoutSaveTimeout.current = setTimeout(async () => {
+      const currentLg = allLayouts.lg || [];
       await Promise.all(
-        currentLayout.map((l: any) =>
+        currentLg.map((l: any) =>
           fetch(`/api/dashboards/${activeDashboardId}/items/${l.i}/layout`, {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
@@ -254,7 +257,7 @@ export function DashboardView({ quickQuestions }: DashboardViewProps) {
         ) : (
           <>
             {/* ── Scrollable drag-and-drop grid ─────────────────────── */}
-            <div ref={scrollRef} className="flex-1 overflow-auto">
+            <div ref={containerRef as any} className="flex-1 overflow-auto">
               <div className="min-h-full">
                 {widgets.length === 0 && !loading && (
                   <div className="h-full min-h-[360px] flex flex-col items-center justify-center text-slate-400 gap-3 mx-6 my-6 border-2 border-dashed border-slate-200 rounded-3xl bg-white/40">
@@ -264,21 +267,23 @@ export function DashboardView({ quickQuestions }: DashboardViewProps) {
                   </div>
                 )}
 
-                {widgets.length > 0 && (
+                {widgets.length > 0 && mounted && (
                   <ResponsiveGridLayout
                     className="layout select-none"
+                    width={width}
                     layouts={layouts as any}
                     breakpoints={{ lg: 1200, md: 996, sm: 768 }}
                     cols={{ lg: 12, md: 10, sm: 6 }}
                     rowHeight={44}
-                    draggableHandle=".drag-handle"
                     onLayoutChange={onLayoutChange}
                     margin={[14, 14]}
                     containerPadding={[16, 16]}
-                    useCSSTransforms
-                    isDraggable
-                    isResizable
-                    resizeHandles={["se", "sw", "ne", "nw", "e", "w", "n", "s"]}
+                    dragConfig={{
+                      handle: ".drag-handle"
+                    }}
+                    resizeConfig={{
+                      handles: ["se", "sw", "ne", "nw", "e", "w", "n", "s"]
+                    }}
                   >
                     {widgets.map(({ item }) => (
                       <div key={item.item_id} style={{ overflow: "hidden" }}>

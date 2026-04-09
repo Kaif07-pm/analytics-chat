@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Bar, BarChart, CartesianGrid, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { jsPDF } from "jspdf";
 import { Send, Download, Plus, MessageSquareText } from "lucide-react";
+import { DashboardView } from "../components/DashboardView";
 import type { SqlResultJson } from "@/lib/db/eventsDb";
 import type { ChartModel, SupportedChartType } from "@/lib/chart/chartPicker";
 
@@ -307,6 +308,7 @@ const ChartPanel = ({ payload }: { payload: ChatPayload }) => {
 };
 
 const ChatPage: NextPage = () => {
+  const [currentTab, setCurrentTab] = useState<"chat" | "dashboard">("chat");
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -368,6 +370,37 @@ const ChatPage: NextPage = () => {
   }) => {
     setLoading(true);
     setChatError(null);
+
+    // Optimistically add the new user message to the UI
+    if (params.replaceUserMessageId) {
+      setMessages((prev) => {
+        const idx = prev.findIndex((m) => m.message_id === params.replaceUserMessageId);
+        if (idx === -1) return prev;
+        const newArr = prev.slice(0, idx);
+        newArr.push({
+          message_id: params.replaceUserMessageId as string,
+          conversation_id: activeConversationId || "temp",
+          role: "user",
+          content: params.message,
+          payload_json: null,
+          created_at: new Date().toISOString()
+        });
+        return newArr;
+      });
+    } else {
+      setMessages((prev) => [
+        ...prev,
+        {
+          message_id: `temp-${Date.now()}`,
+          conversation_id: activeConversationId || "temp",
+          role: "user",
+          content: params.message,
+          payload_json: null,
+          created_at: new Date().toISOString()
+        }
+      ]);
+    }
+
     try {
       const res = await fetch("/api/chat", {
         method: "POST",
@@ -486,9 +519,36 @@ const ChatPage: NextPage = () => {
   };
 
   return (
-    <div className="h-screen w-full flex bg-slate-50">
-      {/* Sidebar */}
-      <aside className="w-72 shrink-0 border-r border-slate-200 bg-slate-50 p-4 flex flex-col h-full min-h-0">
+    <div className="h-screen w-full flex flex-col bg-slate-50">
+      {/* Global Top Nav */}
+      <header className="h-14 bg-white border-b border-slate-200 flex items-center px-4 shrink-0 shadow-sm z-10">
+        <div className="flex bg-slate-100 p-1 rounded-lg">
+          <button
+            onClick={() => setCurrentTab("chat")}
+            className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-colors ${
+              currentTab === "chat" ? "bg-white text-blue-600 shadow-sm" : "text-slate-600 hover:text-slate-900"
+            }`}
+          >
+            Chat
+          </button>
+          <button
+            onClick={() => setCurrentTab("dashboard")}
+            className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-colors ${
+              currentTab === "dashboard" ? "bg-white text-blue-600 shadow-sm" : "text-slate-600 hover:text-slate-900"
+            }`}
+          >
+            Dashboards
+          </button>
+        </div>
+      </header>
+
+      <div className="flex-1 flex min-h-0">
+        {currentTab === "dashboard" ? (
+          <DashboardView quickQuestions={quickQuestions} />
+        ) : (
+          <>
+            {/* Sidebar */}
+            <aside className="w-72 shrink-0 border-r border-slate-200 bg-slate-50 p-4 flex flex-col h-full min-h-0">
         <div className="flex items-center justify-between gap-2">
           <div className="text-sm font-bold text-slate-900 tracking-tight">Analytics</div>
           <button
@@ -721,6 +781,18 @@ const ChatPage: NextPage = () => {
                 </div>
               );
             })}
+
+            {loading ? (
+              <div className="flex">
+                <div className="max-w-[860px] w-full rounded-xl p-4 shadow-sm transition-all mr-auto bg-white text-slate-900 border border-slate-200">
+                  <div className="flex items-center gap-1 h-6">
+                    <div className="w-2 h-2 rounded-full bg-slate-400 animate-bounce" style={{ animationDelay: "0ms" }}></div>
+                    <div className="w-2 h-2 rounded-full bg-slate-400 animate-bounce" style={{ animationDelay: "150ms" }}></div>
+                    <div className="w-2 h-2 rounded-full bg-slate-400 animate-bounce" style={{ animationDelay: "300ms" }}></div>
+                  </div>
+                </div>
+              </div>
+            ) : null}
           </div>
         </div>
 
@@ -761,6 +833,9 @@ const ChatPage: NextPage = () => {
           </div>
         </div>
       </main>
+          </>
+        )}
+      </div>
     </div>
   );
 };

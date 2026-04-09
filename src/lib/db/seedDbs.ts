@@ -1,7 +1,7 @@
 import fs from "fs";
 import Database from "better-sqlite3";
 import { addDays } from "date-fns";
-import { EVENTS_DB_PATH, QUICK_ACCESS_DB_PATH, CHAT_DB_PATH, DB_DIR } from "./paths";
+import { EVENTS_DB_PATH, QUICK_ACCESS_DB_PATH, CHAT_DB_PATH, DASHBOARD_DB_PATH, DB_DIR } from "./paths";
 
 type UserRole = "Super Admin" | "General Admin" | "Portal Operator";
 
@@ -127,6 +127,28 @@ function initChatSchema(db: any) {
       FOREIGN KEY(conversation_id) REFERENCES conversations(conversation_id)
     );
     CREATE INDEX IF NOT EXISTS idx_messages_conv ON messages(conversation_id, created_at);
+  `);
+}
+
+function initDashboardSchema(db: any) {
+  db.exec(`
+    PRAGMA journal_mode = WAL;
+    CREATE TABLE IF NOT EXISTS dashboards (
+      dashboard_id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS dashboard_items (
+      item_id TEXT PRIMARY KEY,
+      dashboard_id TEXT NOT NULL,
+      question TEXT NOT NULL,
+      sql_query TEXT NOT NULL,
+      interpretation TEXT NOT NULL,
+      chart_model_json TEXT NOT NULL,
+      refresh_interval INTEGER NOT NULL,
+      created_at TEXT NOT NULL,
+      FOREIGN KEY(dashboard_id) REFERENCES dashboards(dashboard_id) ON DELETE CASCADE
+    );
   `);
 }
 
@@ -705,15 +727,18 @@ export async function seedDbs(opts?: SeedDbOptions) {
     recreateDb(EVENTS_DB_PATH);
     recreateDb(QUICK_ACCESS_DB_PATH);
     recreateDb(CHAT_DB_PATH);
+    recreateDb(DASHBOARD_DB_PATH);
   }
 
   const eventsDb = new Database(EVENTS_DB_PATH);
   const quickDb = new Database(QUICK_ACCESS_DB_PATH);
   const chatDb = new Database(CHAT_DB_PATH);
+  const dashboardDb = new Database(DASHBOARD_DB_PATH);
 
   initEventsSchema(eventsDb);
   initQuickAccessSchema(quickDb);
   initChatSchema(chatDb);
+  initDashboardSchema(dashboardDb);
 
   seedQuickAccess(quickDb);
   if (!dbHasRows(EVENTS_DB_PATH, "events")) {
@@ -728,9 +753,18 @@ export async function seedDbs(opts?: SeedDbOptions) {
     chatDb.prepare(`INSERT INTO conversations (conversation_id, title, created_at) VALUES (?, ?, ?)`).run(conversationId, "Analytics Prototype", createdAt);
   }
 
+  // Insert a default dashboard only once.
+  const existingDash = dashboardDb.prepare(`SELECT COUNT(*) AS c FROM dashboards`).get() as { c: number };
+  if ((existingDash?.c ?? 0) === 0) {
+    const dashboardId = `DASH-${Date.now()}`;
+    const createdAt = isoNowIstString();
+    dashboardDb.prepare(`INSERT INTO dashboards (dashboard_id, title, created_at) VALUES (?, ?, ?)`).run(dashboardId, "Main Dashboard", createdAt);
+  }
+
   // Close DBs
   eventsDb.close();
   quickDb.close();
   chatDb.close();
+  dashboardDb.close();
 }
 
